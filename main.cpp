@@ -18,6 +18,8 @@
 
 int DAY_STEPS = 24;
 int PARKINGLOT_SIZE = 16;
+int BREAK_POINT = 2;
+
 std::random_device rd;
 
 int vehicle_id = 0;
@@ -96,8 +98,18 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, std::_Bind<std::u
 
         int num = dice2();
 
-        // park 1+n car
-        if (num > 0) {
+        /*
+            *0-5*
+            8-18: druk (aankomen)
+            18-7: rustig (weggaan)
+
+            *6-7*
+            10-21: druk
+            21:10: rustig
+        */
+
+        if (num >= BREAK_POINT + ((i > 8 && i < 18) ? -1 : 2)) {
+            // park 1+n car
             int var = 5;
             for (int j = 0; j < 5; j++) {
                 Vehicle* veh = getAVehicle(vehicles);
@@ -108,9 +120,11 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, std::_Bind<std::u
             }
 
 
-        } else if (num == 0) {
+        } else if (num < BREAK_POINT + ((i > 8 && i < 18) ? -1 : 3)) {
             // leave 1+n car
             int var = 5;
+
+            // TODO: track vehicles still present and remove them from there.
             for (int j = 0; j < 5; j++) {
                 Vehicle* veh = getAVehicle(vehicles);
                 if (veh->parkingLot != NULL) {
@@ -128,10 +142,6 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, std::_Bind<std::u
         //pl->summarizeLot();
         displayParkingLots();
 
-
-        // car goes into avaiable parking lot
-        // go over parking lots.
-
         // suspense between iterations
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
@@ -140,24 +150,23 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, std::_Bind<std::u
 
 
 int main() {
-    int daysPassed = 0;git a
+
+    int daysPassed = 0;
     int maxDays = 30;
 
-
-    // generate 2-dice
+    // Generate 2-dice
     std::default_random_engine generator(rd());
-    std::uniform_int_distribution<int> distribution(0,2);
+    std::uniform_int_distribution<int> distribution(0,3);
     auto dice2 = std::bind ( distribution, generator);
 
+    // create vehicles and save them in vector
     std::vector<Vehicle*> vehicles = createVehicles(300);
-    std::cout << vehicles.size() << "\n";
 
-    Vehicle* vehicle = getAVehicle(&vehicles);
-    std::cout << vehicle->id << "\n";
-
+    // create first parking lot
     ParkingLot pl = ParkingLot(parkinglot_id++ , PARKINGLOT_SIZE * 4);
     parkingLots.push_back(&pl);
-    std::cout << "ok" << "\n";
+
+    // Hour progression
     while(daysPassed <= maxDays) {
         loop(&vehicles, &pl, dice2, daysPassed);
         daysPassed++;
