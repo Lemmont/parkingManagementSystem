@@ -4,18 +4,24 @@
 #include <iostream>
 #include <ctime>
 #include "parkinglot.h"
+#include <string>
 
 class ParkingLot;
+
 
 class Vehicle {
     public:
         int id;
-        time_t entryTimestamp;
+        int entryDay;
+        int entryHour;
+        std::string state;
         ParkingLot* parkingLot;
 
+        Vehicle();
         Vehicle(int x);
 
-        void enterLot(ParkingLot* parkingLot);
+        void enterLot(ParkingLot* parkingLot, int day, int hour);
+        void leaveLot(ParkingLot* parkingLot);
 
         void timeSinceEntry();
 

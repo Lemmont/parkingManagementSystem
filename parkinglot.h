@@ -15,15 +15,17 @@ class ParkingLot {
 
         ParkingLot(int x, int y);
 
-        int enterLot(Vehicle* vehicle);
+        int enterLot(Vehicle* vehicle, int day, int hour);
 
-        // int leaveLot(Vehicle* vehicle);
+        int leaveLot(Vehicle* vehicle);
 
-        // void viewLot();
+        void viewLot();
+        void summarizeLot();
 
     private:
 
         void entryMessage(Vehicle* vehicle);
+        void leaveMessage(Vehicle* vehicle);
 };
 
 #endif // PARKINGLOT_H
