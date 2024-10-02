@@ -18,7 +18,7 @@
 
 int DAY_STEPS = 24;
 int PARKINGLOT_SIZE = 16;
-int BREAK_POINT = 2;
+int BASE_DAILY_COST = 500;
 
 std::random_device rd;
 
@@ -26,20 +26,39 @@ int vehicle_id = 0;
 int parkinglot_id = 0;
 
 std::list<ParkingLot *> parkingLots;
+std::map<int, Vehicle*> parkedVehicles;
+std::map<int, Vehicle*> ridingVehicles;
 
 
-ParkingLot createParkingLot() {
-    ParkingLot pl(++parkinglot_id, PARKINGLOT_SIZE);
-    return pl;
+
+/* Get a random vehicle pointer from a vector of pointer vehicles based*/
+Vehicle* getAVehicle(std::map<int, Vehicle *>* vehicles) {
+    if (vehicles->size() == 0) {
+        return NULL;
+    }
+
+    std::srand(std::time(0));
+    int randomIndex = std::rand() % vehicles->size();
+    auto it = vehicles->begin();
+    std::advance(it, randomIndex);
+
+    return vehicles->at(it->first);
 }
 
-Vehicle* getAVehicle(std::vector<Vehicle *>* vehicles) {
-    std::default_random_engine generator(rd());
-    std::uniform_int_distribution<int> distribution(0, vehicles->size() - 1);
-    auto diceLength = std::bind( distribution, generator);
-    int num = diceLength();
 
-    return (*vehicles)[num];
+void setParkedVehicle(Vehicle* vehicle) {
+    if (vehicle != NULL && parkedVehicles.count(vehicle->id) == 0) {
+        parkedVehicles[vehicle->id] = vehicle;
+        ridingVehicles.erase(vehicle->id);
+    }
+}
+
+void setRidingVehicle(Vehicle* vehicle) {
+    if (vehicle != NULL && ridingVehicles.count(vehicle->id) == 0) {
+        ridingVehicles[vehicle->id] = vehicle;
+        parkedVehicles.erase(vehicle->id);
+    }
+    std::cout << "ok6\n";
 }
 
 /*
@@ -53,33 +72,58 @@ std::vector<Vehicle *> createVehicles(int amount) {
     return vehicles;
 }
 
+ParkingLot* createNewParkingLot() {
+    int size_factor = rand()%(10-1 + 1) + 1;
+    int rate_factor = rand()%(10-1 + 1) + 1;
+    std::cout << rate_factor << "\n";
+    ParkingLot* newPl = new ParkingLot(parkinglot_id++ , PARKINGLOT_SIZE * size_factor, 1.25 * rate_factor, BASE_DAILY_COST * size_factor);
+    return newPl;
+};
+
 /* Get the most optimal parking lot to park a vehicle into. */
 ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
     if (parkingLots->empty()) return nullptr;
 
-    ParkingLot* leastLoadedLot = nullptr;
-    int minVehicles = 16;
+    ParkingLot* bestLot = nullptr;
+    double minScore = std::numeric_limits<double>::max();
+
+    // Weights for occupancy and hourly rate
+    double w_occupancy = 0.7;  // 70% weight for occupancy
+    double w_rate = 0.3;       // 30% weight for rate
+
+    // Find the maximum hourly rate in the parking lots to normalize rates
+    double maxRate = 0.0;
+    for (auto lot : *parkingLots) {
+        if (lot->getHourRate() > maxRate) {
+            maxRate = lot->getHourRate();
+        }
+    }
 
     for (auto it = parkingLots->begin(); it != parkingLots->end(); it++) {
         ParkingLot* lot = *it;
         int vehicleCount = lot->vehicles.size();
-
         int maxVehicles = lot->space;
 
-        if (vehicleCount < maxVehicles || (vehicleCount < maxVehicles && vehicleCount < minVehicles)) {
-            minVehicles = vehicleCount;
-            leastLoadedLot = lot;
+        double occupancy = static_cast<double>(vehicleCount) / maxVehicles;
+
+        double normalizedRate = static_cast<double>(lot->getHourRate()) / maxRate;
+
+        double score = (w_occupancy * occupancy) + (w_rate * normalizedRate);
+
+        if (occupancy < minScore) {
+            minScore = score;
+            bestLot = lot;
         }
     }
 
-    if (leastLoadedLot == nullptr) {
-        ParkingLot* newPl = new ParkingLot(parkinglot_id++ ,PARKINGLOT_SIZE);
+    if (bestLot == nullptr || minScore >= 1.0) {
+        ParkingLot* newPl = createNewParkingLot();
         parkingLots->push_back(newPl);
         return newPl;
     }
 
 
-    return leastLoadedLot;
+    return bestLot;
 
 }
 
@@ -90,85 +134,97 @@ void displayParkingLots() {
     }
 }
 
-void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, std::_Bind<std::uniform_int_distribution<int> (std::default_random_engine)> dice2, int day) {
+void updateBalanceDailyCostParkingLot() {
+    for (auto it = parkingLots.begin(); it != parkingLots.end(); it++) {
+        ParkingLot* lot = *it;
+        lot->updateBalance(lot->getDailyCosts(), false);
+    }
+}
+
+void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
     ParkingLot* pl = plInit;
+    int busyFactor = 1.0 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(3.0-1.0)));
     for (int i = 0; i < DAY_STEPS; i++) {
-        std::cout << "ok" << "\n";
-        std::cout << "\033[2J\033[1;1H";;
+        // clear screen
+        std::cout << "\033[2J\033[1;1H";
 
-        int num = dice2();
 
-        /*
-            *0-5*
-            8-18: druk (aankomen)
-            18-7: rustig (weggaan)
+        // determine random chances and factors
+       float r3 = 0.9 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(1.3-0.9)));
 
-            *6-7*
-            10-21: druk
-            21:10: rustig
-        */
+       int hourEnter = 1;
+       int hourLeave = 1;
 
-        if (num >= BREAK_POINT + ((i > 8 && i < 18) ? -1 : 2)) {
-            // park 1+n car
-            int var = 5;
-            for (int j = 0; j < 5; j++) {
-                Vehicle* veh = getAVehicle(vehicles);
-                if (veh->parkingLot == NULL) {
-                    pl = parkingLoadBalancer(&parkingLots);
-                    pl->enterLot(veh, day, i);
-                }
+       if (i >= 7 && i < 19) {
+            hourEnter = 2;
+            hourLeave = 0.8;
+       } else {
+            hourEnter = 0.1;
+            hourLeave = 4;
+       }
+
+       int baseEnter = 10;
+       int baseLeave = 10;
+
+        // leave parking lot
+       for (int j = 0; j < (int) (baseLeave * busyFactor) * hourLeave * r3; j++) {
+            std::cout << "ok10\n";
+            Vehicle* veh = getAVehicle(&parkedVehicles);
+            std::cout << "ok11\n";
+            if (veh != NULL) {
+                std::cout << "ok12\n";
+                pl = veh->parkingLot;
+                std::cout << "ok13\n";
+                pl->leaveLot(veh, day, i);
+                std::cout << "ok14\n";
+                setRidingVehicle(veh);
+                std::cout << "ok15\n";
             }
+        }
+        std::cout << "ok8\n";
 
-
-        } else if (num < BREAK_POINT + ((i > 8 && i < 18) ? -1 : 3)) {
-            // leave 1+n car
-            int var = 5;
-
-            // TODO: track vehicles still present and remove them from there.
-            for (int j = 0; j < 5; j++) {
-                Vehicle* veh = getAVehicle(vehicles);
-                if (veh->parkingLot != NULL) {
-                    pl = veh->parkingLot;
-                    pl->leaveLot(veh);
-                }
+        // enter parking lot
+        for (int j = 0; j < (int) (baseEnter * busyFactor) * hourEnter; j++) {
+            Vehicle* veh = getAVehicle(&ridingVehicles);
+            if (veh != NULL && veh->parkingLot == NULL) {
+                pl = parkingLoadBalancer(&parkingLots);
+                pl->enterLot(veh, day, i);
+                setParkedVehicle(veh);
             }
         }
 
         std::cout << "Day: " << day << ", Hour: " << i << "\n\n";
 
-        /* check for parking lots that have been empty for a long time */
-
-        // pk->viewLot();
-        //pl->summarizeLot();
+        /* check for parking lots that have been empty for a long time */;
         displayParkingLots();
 
         // suspense between iterations
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
+    updateBalanceDailyCostParkingLot();
 }
 
 
 
 int main() {
-
+    srand (static_cast <unsigned> (time(0)));
     int daysPassed = 0;
     int maxDays = 30;
 
-    // Generate 2-dice
-    std::default_random_engine generator(rd());
-    std::uniform_int_distribution<int> distribution(0,3);
-    auto dice2 = std::bind ( distribution, generator);
-
     // create vehicles and save them in vector
-    std::vector<Vehicle*> vehicles = createVehicles(300);
+    std::vector<Vehicle*> vehicles = createVehicles(1000);
+
+    for (int i = 0; i < vehicles.size(); i++) {
+        ridingVehicles[vehicles[i]->id] = vehicles[i];
+    }
 
     // create first parking lot
-    ParkingLot pl = ParkingLot(parkinglot_id++ , PARKINGLOT_SIZE * 4);
-    parkingLots.push_back(&pl);
+    ParkingLot* pl = createNewParkingLot();
+    parkingLots.push_back(pl);
 
     // Hour progression
     while(daysPassed <= maxDays) {
-        loop(&vehicles, &pl, dice2, daysPassed);
+        loop(&vehicles, pl, daysPassed);
         daysPassed++;
         std::cout << "Day: " << daysPassed << " \n";
     };
