@@ -11,7 +11,7 @@ class ParkingLot {
     public:
         int id;
         int space;
-        std::map<int, Vehicle*> vehicles;
+        std::map<int, Vehicle*> vehicles = {};
 
         ParkingLot(int x, int y, float rate, float cost);
 

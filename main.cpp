@@ -58,7 +58,6 @@ void setRidingVehicle(Vehicle* vehicle) {
         ridingVehicles[vehicle->id] = vehicle;
         parkedVehicles.erase(vehicle->id);
     }
-    std::cout << "ok6\n";
 }
 
 /*
@@ -75,12 +74,11 @@ std::vector<Vehicle *> createVehicles(int amount) {
 ParkingLot* createNewParkingLot() {
     int size_factor = rand()%(10-1 + 1) + 1;
     int rate_factor = rand()%(10-1 + 1) + 1;
-    std::cout << rate_factor << "\n";
     ParkingLot* newPl = new ParkingLot(parkinglot_id++ , PARKINGLOT_SIZE * size_factor, 1.25 * rate_factor, BASE_DAILY_COST * size_factor);
     return newPl;
 };
 
-/* Get the most optimal parking lot to park a vehicle into. */
+/* Get the most optimal parking lot to park a vehicle. */
 ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
     if (parkingLots->empty()) return nullptr;
 
@@ -88,8 +86,8 @@ ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
     double minScore = std::numeric_limits<double>::max();
 
     // Weights for occupancy and hourly rate
-    double w_occupancy = 0.7;  // 70% weight for occupancy
-    double w_rate = 0.3;       // 30% weight for rate
+    double w_occupancy = 0.6;  // 70% weight for occupancy
+    double w_rate = 0.4;       // 30% weight for rate
 
     // Find the maximum hourly rate in the parking lots to normalize rates
     double maxRate = 0.0;
@@ -103,6 +101,10 @@ ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
         ParkingLot* lot = *it;
         int vehicleCount = lot->vehicles.size();
         int maxVehicles = lot->space;
+
+        if (vehicleCount >= maxVehicles) {
+            continue;
+        }
 
         double occupancy = static_cast<double>(vehicleCount) / maxVehicles;
 
@@ -168,20 +170,13 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
 
         // leave parking lot
        for (int j = 0; j < (int) (baseLeave * busyFactor) * hourLeave * r3; j++) {
-            std::cout << "ok10\n";
             Vehicle* veh = getAVehicle(&parkedVehicles);
-            std::cout << "ok11\n";
             if (veh != NULL) {
-                std::cout << "ok12\n";
                 pl = veh->parkingLot;
-                std::cout << "ok13\n";
                 pl->leaveLot(veh, day, i);
-                std::cout << "ok14\n";
                 setRidingVehicle(veh);
-                std::cout << "ok15\n";
             }
         }
-        std::cout << "ok8\n";
 
         // enter parking lot
         for (int j = 0; j < (int) (baseEnter * busyFactor) * hourEnter; j++) {

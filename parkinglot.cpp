@@ -31,41 +31,30 @@ int ParkingLot::enterLot(Vehicle* vehicle, int day, int hour) {
 };
 
 int ParkingLot::leaveLot(Vehicle* vehicle, int day, int hour) {
-    std::cout << "ok40\n";
     // check if vehicle is valid
     if (vehicle == NULL) {
-        std::cout << "ok30\n";
         return 2; // not valid vehicle
     }
-    std::cout << "ok401\n";
-    std::cout << "ok401" << vehicle->id << "\n";
-    if  (this->vehicles.count(vehicle->id) == 0) {
-        std::cout << "ok20\n";
+    if  (this->vehicles.count(vehicle->id) == 0) {;
         return 3; // not found
     } else {
         // calculate costs
-        std::cout << "ok\n";
         int daysSpent = day - vehicle->entryDay;
         int hoursSpent = (hour - vehicle->entryHour) + hour + (daysSpent > 1 ? 24 * daysSpent : 0);
         int hourRate = vehicle->parkingLot->getHourRate();
         float owned = hourRate * hoursSpent;
-        std::cout << "ok1\n";
 
         vehicle->parkingLot->updateBalance(owned, owned >= 0 ? true : false);
         vehicle->parkingLot->updateMoneyEarned(owned);
-        std::cout << "ok2\n";
 
 
         this->vehicles.erase(vehicle->id);
-        std::cout << "ok4\n";
 
         vehicle->leaveLot(this);
-        std::cout << "ok5\n";
 
         //leaveMessage(vehicle);
         return 0;
     }
-    std::cout << "ok50\n";
 }
 
 void ParkingLot::viewLot() {
