@@ -5,6 +5,7 @@
 #include <ctime>
 #include "parkinglot.h"
 #include <string>
+#include <vector>
 
 class ParkingLot;
 
@@ -27,4 +28,10 @@ class Vehicle {
 
 
 };
+
+Vehicle* getAVehicle(std::map<int, Vehicle *>* vehicles);
+
+std::vector<Vehicle *> createVehicles(int amount);
+void addVehicles(std::vector<Vehicle *> vehicles,std::map<int, Vehicle*> *ridingVehicles, int amount);
+
 #endif // VEHICLE_H

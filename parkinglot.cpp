@@ -1,11 +1,14 @@
 #include "parkinglot.h"
 #include "vehicle.h"
+#include <list>
 
-ParkingLot::ParkingLot(int x, int y, float rate, float cost) {
+
+ParkingLot::ParkingLot(int x, int y, float rate, float cost, float startingBalance) {
     id = x;
     space = y;
     hourRate = rate;
     dailyCosts = cost;
+    balance = startingBalance;
 };
 
 int ParkingLot::enterLot(Vehicle* vehicle, int day, int hour) {
@@ -35,6 +38,7 @@ int ParkingLot::leaveLot(Vehicle* vehicle, int day, int hour) {
     if (vehicle == NULL) {
         return 2; // not valid vehicle
     }
+
     if  (this->vehicles.count(vehicle->id) == 0) {;
         return 3; // not found
     } else {
@@ -85,6 +89,11 @@ void ParkingLot::updateBalance(float value, bool addition) {
         this->balance -= value;
     }
 };
+
+void ParkingLot::updateCosts(float value) {
+    this->dailyCosts *= value;
+};
+
 void ParkingLot::updateMoneyEarned(float value) {
     this->moneyEarned =+ value;
 };
@@ -100,3 +109,26 @@ void ParkingLot::entryMessage(Vehicle* vehicle){
 void ParkingLot::leaveMessage(Vehicle* vehicle){
     std::cout << "vehicle " << vehicle->id << " has left lot " << this->id << " on day " << vehicle->entryDay << " at hour" << vehicle->entryHour << "\n";
 };
+
+// Create a new parkinglot with some randomness.
+ParkingLot* createNewParkingLot(int parkinglot_id, int parkinglot_size, float base_daily_cost, float startingBalance) {
+    int size_factor = rand()%(10-1 + 1) + 1;
+    int rate_factor = rand()%(10-1 + 1) + 1;
+    ParkingLot* newPl = new ParkingLot(parkinglot_id, parkinglot_size * size_factor, 1.25 * rate_factor, base_daily_cost * size_factor, startingBalance);
+
+    return newPl;
+};
+
+void displayParkingLots(std::list<ParkingLot *> parkingLots) {
+    for (auto it = parkingLots.begin(); it != parkingLots.end(); it++) {
+        ParkingLot* lot = *it;
+        lot->summarizeLot();
+    }
+}
+
+void updateBalanceDailyCostParkingLot(std::list<ParkingLot *> parkingLots) {
+    for (auto it = parkingLots.begin(); it != parkingLots.end(); it++) {
+        ParkingLot* lot = *it;
+        lot->updateBalance(lot->getDailyCosts(), false);
+    }
+}
