@@ -31,6 +31,11 @@ Using a weighted scoring function, multiple factors can be considered when choos
 
 score= w_occupancy * occupancy_ratio + w_rate * (max_rate/hourly_rate)
 ​
+#### Closing parking lots
+When a parking lot is not attracting vehicles, staying open is not profitable. When a parking lot has a debt ((daily revenue - daily costs) < 0) for consecutive days in a row, a parking lot closes.
+
+#### Expanding parking lots
+A parking lot can decide to expand the amount of vehicles it can house. When it has atleast 50000 in balance, it can double its parking lot size. If expanded, so does the operating costs which is also doubled.
 
 
 More to be added...
