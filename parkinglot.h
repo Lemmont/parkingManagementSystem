@@ -29,6 +29,7 @@ class ParkingLot {
         void updateMoneyEarned(float value);
 
         void updateCosts(float value);
+        void updateRate(float value);
 
 
         void viewLot();

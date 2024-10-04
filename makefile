@@ -1,6 +1,6 @@
 CXX = g++
 
-CXXFLAGS = -Wall -g
+CXXFLAGS = -O2 -Wall -g
 
 TARGET=main
 SRC= main.cpp parkinglot.cpp vehicle.cpp

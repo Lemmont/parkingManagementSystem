@@ -4,6 +4,11 @@
     .track vehicles entering and exiting a parking lot
     .calculate charges
     .maintain vehicle details.
+
+
+    1. sell space when in debt
+    2. increase price when in debt
+    3. decrease price when enough customers
 */
 #include "parkinglot.h"
 #include "vehicle.h"
@@ -18,7 +23,7 @@
 
 int DAY_STEPS = 24;
 int PARKINGLOT_SIZE = 16;
-int BASE_DAILY_COST = 500;
+int BASE_DAILY_COST = 2000;
 
 int vehicle_id = 0;
 int parkinglot_id = 0;
@@ -26,7 +31,10 @@ int parkinglot_id = 0;
 std::random_device rd;
 
 std::list<ParkingLot *> parkingLots;
-std::map<int, int> lotsInNegative = {};
+std::map<int, int> lotsInDebt = {};
+std::map<int, bool> lotsToUpgrade = {};
+std::map<int, bool> lotsToDecreaseRate = {};
+std::map<int, bool> lotsDay = {};
 std::map<int, Vehicle*> parkedVehicles;
 std::map<int, Vehicle*> ridingVehicles;
 
@@ -61,8 +69,8 @@ ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
     double minScore = std::numeric_limits<double>::max();
 
     // Weights for occupancy and hourly rate
-    double w_occupancy = 0.4;  // 70% weight for occupancy
-    double w_rate = 0.6;       // 30% weight for rate
+    double w_occupancy = 0.2;  // 40% weight for occupancy
+    double w_rate = 0.8;       // 60% weight for rate
 
     // Find the maximum hourly rate in the parking lots to normalize rates
     double maxRate = 0.0;
@@ -94,7 +102,7 @@ ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
     }
 
     if (bestLot == nullptr || minScore >= 1.0) {
-        ParkingLot* newPl = createNewParkingLot(++parkinglot_id, PARKINGLOT_SIZE, BASE_DAILY_COST, -10000.0);
+        ParkingLot* newPl = createNewParkingLot(++parkinglot_id, PARKINGLOT_SIZE, BASE_DAILY_COST, -2000.0);
         parkingLots->push_back(newPl);
         return newPl;
     }
@@ -104,17 +112,71 @@ ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
 
 }
 
-std::list<ParkingLot *> deleteParkingLots(std::list<ParkingLot *>* parkingLots, std::map<int, Vehicle*>* parkedVehicles, int day, int hour) {
+/* Action to take. */
+void lotTakesAction(ParkingLot* parkingLot, std::list<ParkingLot *>* parkingLots) {
+    for (auto copyIt = parkingLots->begin(); copyIt != parkingLots->end(); copyIt++) {
+        ParkingLot* copyLot = *copyIt;
+
+        if (copyLot->id == parkingLot->id) {
+            float balance = copyLot->getBalance();
+
+            if (lotsToDecreaseRate.count(copyLot->id) == 1 && lotsInDebt.count(parkingLot->id) == 0) {
+                copyLot->updateRate(copyLot->getHourRate()/-2);
+                lotsToDecreaseRate.erase(copyLot->id);
+            }
+
+            // TODO: check if parking lot actually has any benefit from upgrading.
+            if (balance > (copyLot->getDailyCosts() * 2) && lotsToUpgrade.count(copyLot->id) == 1) {
+                // buy upgrade, double lot size
+                copyLot->updateBalance(copyLot->getDailyCosts() * 2, false);
+                copyLot->space *= 2;
+                copyLot->updateCosts(2);
+                lotsToUpgrade.erase(copyLot->id);
+            } else if (balance < 0 && lotsInDebt.count(parkingLot->id) == 1 && parkingLot->space > 16 && parkingLot->space >= 32) {
+                // sell lot.
+                if (lotsInDebt[parkingLot->id] >= 2) {
+                    copyLot->updateBalance(copyLot->getDailyCosts() / 2, true);
+                    copyLot->space /= 2;
+                    copyLot->updateCosts(0.5);
+                    if (copyLot->getBalance() > 0) {
+                        lotsInDebt.erase(copyLot->id);
+                    }
+                }
+
+                // increase rate
+                if (lotsInDebt[parkingLot->id] >= 1) {
+                    copyLot->updateRate(copyLot->getHourRate() * 2);
+                }
+            }
+        }
+    }
+}
+
+/* Check every parking lot for any actions to take, any financial consequences etc. */
+std::list<ParkingLot *> updateLots(std::list<ParkingLot *>* parkingLots, std::map<int, Vehicle*>* parkedVehicles, int day, int hour) {
     std::list<ParkingLot *> copyParkingLots = *parkingLots;
     std::map<int, Vehicle*> copyParkedVehicles = *parkedVehicles;
 
+    // loop over all parking lots
     for (auto it = parkingLots->begin(); it != parkingLots->end(); it++) {
+
+        // individual parking lot
         ParkingLot* lot = *it;
+
+        // in debt
         if (lot->getBalance() < 0) {
-            if (lotsInNegative.count(lot->id) == 0) {
-                lotsInNegative[lot->id] = 1;
-                // 3 dagen
-            } else if (lotsInNegative[lot->id] == 3) {
+            if (lotsInDebt.count(lot->id) == 0) {
+                lotsInDebt[lot->id] = 1;
+            }
+
+            // add another day in debt
+            lotsInDebt[lot->id] += 1;
+
+            // TODO: take possible action to prevent bankruptcy (short term or long term)
+            lotTakesAction(lot, &copyParkingLots);
+
+            // been in debt too long
+            if (lotsInDebt[lot->id] == 3) {
                 // remove vehicles
                 for (auto pv = copyParkedVehicles.begin(); pv != copyParkedVehicles.end(); pv++) {
                     if (pv->second->parkingLot != NULL && pv->second->parkingLot->id == lot->id) {
@@ -122,33 +184,19 @@ std::list<ParkingLot *> deleteParkingLots(std::list<ParkingLot *>* parkingLots, 
                         setRidingVehicle(pv->second);
                     }
                 }
-                // remove from tracker map
+                // remove from tracker maps
                 copyParkingLots.remove(lot);
-                lotsInNegative.erase(lot->id);
+                lotsInDebt.erase(lot->id);
 
-                // delete lot
-                //free(lot);
-            } else {
-                lotsInNegative[lot->id] += 1;
             }
-        }
+        } else {
+            // postive balance
 
-        //lot->updateBalance(lot->getDailyCosts(), false);
+            // TODO: take action with your money.
+            lotTakesAction(lot, &copyParkingLots);
+        }
     }
     return copyParkingLots;
-}
-
-void buyUpgradeLotSize(std::list<ParkingLot *>* parkingLots) {
-    std::list<ParkingLot *> copyParkingLots = *parkingLots;
-    for (auto it = parkingLots->begin(); it != parkingLots->end(); it++) {
-        ParkingLot* lot = *it;
-        if (lot->getBalance() > 50000) {
-            // buy upgrade, double lot size
-            lot->updateBalance(50000, false);
-            lot->space *= 2;
-            lot->updateCosts(2);
-        }
-    }
 }
 
 int getTotalSpace(std::list<ParkingLot *>* parkingLots) {
@@ -165,7 +213,9 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
     ParkingLot* pl = plInit;
     int busyFactor = 1.0 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(3.0-1.0)));
     for (int i = 0; i < DAY_STEPS; i++) {
+        // set random seed
         srand (static_cast <unsigned> (time(0)));
+
         // clear screen
         std::cout << "\033[2J\033[1;1H";
 
@@ -178,7 +228,7 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
 
        if (i >= 7 && i < 19) {
             hourEnter = 2;
-            hourLeave = 0.8;
+            hourLeave = 1;
        } else {
             hourEnter = 0.1;
             hourLeave = 4;
@@ -202,7 +252,7 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
         }
 
         // enter parking lot
-        for (int j = 0; j < (int) (baseEnter * busyFactor) * hourEnter; j++) {
+        for (int k = 0; k < (int) (baseEnter * busyFactor) * hourEnter; k++) {
 
             Vehicle* veh = getAVehicle(&ridingVehicles);
 
@@ -212,8 +262,17 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
 
                 pl->enterLot(veh, day, i);
 
-                setParkedVehicle(veh);
+                // check parking lot occupancy
+                if (pl->vehicles.size() > (int) pl->space * 0.9 && lotsToUpgrade.count(pl->id) == 0) {
+                    lotsToUpgrade[pl->id] = true;
+                }
 
+                if (pl->vehicles.size() > (int) pl->space * 0.7 && lotsToUpgrade.count(pl->id) == 0) {
+                    lotsToDecreaseRate[pl->id] = true;
+                }
+
+
+                setParkedVehicle(veh);
             }
         }
 
@@ -226,9 +285,8 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     updateBalanceDailyCostParkingLot(parkingLots);
-    parkingLots = deleteParkingLots(&parkingLots, &parkedVehicles, day, 0);
+    parkingLots = updateLots(&parkingLots, &parkedVehicles, day, 0);
     displayParkingLots(parkingLots);
-    buyUpgradeLotSize(&parkingLots);
     //addVehicles(*vehicles, &ridingVehicles ,100); //TODO depends on current supply-demand balance.
 }
 
@@ -247,7 +305,7 @@ int main() {
     }
 
     // create first parking lot
-    ParkingLot* pl = createNewParkingLot(parkinglot_id, PARKINGLOT_SIZE, BASE_DAILY_COST, 0.0);
+    ParkingLot* pl = createNewParkingLot(parkinglot_id, PARKINGLOT_SIZE, BASE_DAILY_COST, -2000.0);
     parkingLots.push_back(pl);
 
     // Hour progression
