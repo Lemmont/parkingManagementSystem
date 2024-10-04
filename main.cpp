@@ -9,6 +9,27 @@
     1. sell space when in debt
     2. increase price when in debt
     3. decrease price when enough customers
+
+    PL:
+    balance = revenue - dc
+    revenue = hours_occupant * rate
+    goal -> dc * 1.2
+
+    for every 16, PL pays 1000
+    => goal -> 1200
+
+    16*12 = 192 hour
+    1200/192 = 6.25
+
+    32*12 = 384 hour
+    2400/384 = 6.25
+
+    64*12
+    3600/768 = 4.68
+
+
+
+
 */
 #include "parkinglot.h"
 #include "vehicle.h"
@@ -23,7 +44,7 @@
 
 int DAY_STEPS = 24;
 int PARKINGLOT_SIZE = 16;
-int BASE_DAILY_COST = 2000;
+int BASE_DAILY_COST = 1000;
 
 int vehicle_id = 0;
 int parkinglot_id = 0;
@@ -69,8 +90,8 @@ ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
     double minScore = std::numeric_limits<double>::max();
 
     // Weights for occupancy and hourly rate
-    double w_occupancy = 0.2;  // 40% weight for occupancy
-    double w_rate = 0.8;       // 60% weight for rate
+    double w_occupancy = 0.5;  // 40% weight for occupancy
+    double w_rate = 0.5;       // 60% weight for rate
 
     // Find the maximum hourly rate in the parking lots to normalize rates
     double maxRate = 0.0;
@@ -102,7 +123,7 @@ ParkingLot* parkingLoadBalancer(std::list<ParkingLot*>* parkingLots) {
     }
 
     if (bestLot == nullptr || minScore >= 1.0) {
-        ParkingLot* newPl = createNewParkingLot(++parkinglot_id, PARKINGLOT_SIZE, BASE_DAILY_COST, -2000.0);
+        ParkingLot* newPl = createNewParkingLot(++parkinglot_id, PARKINGLOT_SIZE, BASE_DAILY_COST, -1000.0);
         parkingLots->push_back(newPl);
         return newPl;
     }
@@ -121,32 +142,37 @@ void lotTakesAction(ParkingLot* parkingLot, std::list<ParkingLot *>* parkingLots
             float balance = copyLot->getBalance();
 
             if (lotsToDecreaseRate.count(copyLot->id) == 1 && lotsInDebt.count(parkingLot->id) == 0) {
-                copyLot->updateRate(copyLot->getHourRate()/-2);
+                if (copyLot->getDailyCosts() / (copyLot->space * 12) >= BASE_DAILY_COST) {
+                    copyLot->updateRate((copyLot->getDailyCosts() * 0.9) / (copyLot->space * 12));
+                } else {
+                    copyLot->updateRate(1.25);
+                }
                 lotsToDecreaseRate.erase(copyLot->id);
             }
 
             // TODO: check if parking lot actually has any benefit from upgrading.
             if (balance > (copyLot->getDailyCosts() * 2) && lotsToUpgrade.count(copyLot->id) == 1) {
                 // buy upgrade, double lot size
-                copyLot->updateBalance(copyLot->getDailyCosts() * 2, false);
+                copyLot->updateBalance(1000, false);
                 copyLot->space *= 2;
-                copyLot->updateCosts(2);
+                copyLot->updateCosts(1000);
+                copyLot->updateRate((copyLot->getDailyCosts() * 1.2) / (copyLot->space * 12));
                 lotsToUpgrade.erase(copyLot->id);
             } else if (balance < 0 && lotsInDebt.count(parkingLot->id) == 1 && parkingLot->space > 16 && parkingLot->space >= 32) {
                 // sell lot.
                 if (lotsInDebt[parkingLot->id] >= 2) {
-                    copyLot->updateBalance(copyLot->getDailyCosts() / 2, true);
+                    copyLot->updateBalance(500, true);
                     copyLot->space /= 2;
-                    copyLot->updateCosts(0.5);
+                    copyLot->updateCosts(-1000);
                     if (copyLot->getBalance() > 0) {
                         lotsInDebt.erase(copyLot->id);
                     }
                 }
 
                 // increase rate
-                if (lotsInDebt[parkingLot->id] >= 1) {
-                    copyLot->updateRate(copyLot->getHourRate() * 2);
-                }
+                // if (lotsInDebt[parkingLot->id] >= 1) {
+                //     copyLot->updateRate(copyLot->getHourRate() * 2);
+                // }
             }
         }
     }
@@ -282,7 +308,7 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
         displayParkingLots(parkingLots);
 
         // suspense between iterations
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     updateBalanceDailyCostParkingLot(parkingLots);
     parkingLots = updateLots(&parkingLots, &parkedVehicles, day, 0);
@@ -295,10 +321,10 @@ void loop(std::vector<Vehicle*>* vehicles, ParkingLot* plInit, int day) {
 int main() {
     srand (static_cast <unsigned> (time(0)));
     int daysPassed = 0;
-    int maxDays = 30;
+    int maxDays = 100;
 
     // create vehicles and save them in vector
-    std::vector<Vehicle*> vehicles = createVehicles(1000);
+    std::vector<Vehicle*> vehicles = createVehicles(10000);
 
     for (int i = 0; i < vehicles.size(); i++) {
         ridingVehicles[vehicles[i]->id] = vehicles[i];

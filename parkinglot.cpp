@@ -91,11 +91,11 @@ void ParkingLot::updateBalance(float value, bool addition) {
 };
 
 void ParkingLot::updateCosts(float value) {
-    this->dailyCosts *= value;
+    this->dailyCosts += value;
 };
 
 void ParkingLot::updateRate(float value) {
-    this->hourRate += value;
+    this->hourRate = value;
 }
 
 void ParkingLot::updateMoneyEarned(float value) {
@@ -118,7 +118,9 @@ void ParkingLot::leaveMessage(Vehicle* vehicle){
 ParkingLot* createNewParkingLot(int parkinglot_id, int parkinglot_size, float base_daily_cost, float startingBalance) {
     int size_factor = rand()%(10-1 + 1) + 1;
     int rate_factor = rand()%(10-1 + 1) + 1;
-    ParkingLot* newPl = new ParkingLot(parkinglot_id, parkinglot_size * size_factor, 1.25 * rate_factor, base_daily_cost * size_factor, startingBalance * size_factor);
+    int total_hours = parkinglot_size * size_factor * 12; // peak hours
+    float expectedRevenue = (base_daily_cost * size_factor) * 1.2;
+    ParkingLot* newPl = new ParkingLot(parkinglot_id, parkinglot_size * size_factor, expectedRevenue / total_hours, base_daily_cost * size_factor, startingBalance * size_factor);
 
     return newPl;
 };
